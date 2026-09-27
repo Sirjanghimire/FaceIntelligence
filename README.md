@@ -1,61 +1,88 @@
-Iris Assistant
-A webcam-only eye-controlled desktop assistant for Windows. The system tracks one axis of your irises — horizontal movement only — and turns small side glances into full control of a tile-based interface at the top of the screen. Blink to select. In under a second you can open YouTube and play a favorite, run a Google search, or send an email to a saved recipient. The entire screen becomes reachable through eye movement alone; hands never leave your lap.
+# Iris Assistant
+
+A webcam-only eye-controlled desktop assistant for Windows. The system tracks **one axis of your irises** — horizontal movement only — and turns small side glances into full control of a tile-based interface at the top of the screen. Blink to select. In under a second you can open YouTube and play a favorite, run a Google search, or send an email to a saved recipient. The entire screen becomes reachable through eye movement alone; hands never leave your lap.
 
 The project is designed for users for whom hand or head movement is unreliable or impossible, and it is built entirely on open-source components that run on the webcam already present on most laptops. It does not require dedicated eye-tracking hardware.
 
-What it does, in one line: iris glances move a marker across tiles, a both-eye blink selects the tile, and the selected action — open a website, play a video, compose and send mail — is executed with an explicit review step unless the user has opted in to auto-send for a specific contact.
+**What it does, in one line:** iris glances move a marker across tiles, a both-eye blink selects the tile, and the selected action — open a website, play a video, compose and send mail — is executed with an explicit review step unless the user has opted in to auto-send for a specific contact.
 
-Two example demo recipients ship in contacts.json (SG and PK). They are the author's personal test addresses used during development. Replace them with your own recipients, or add entries with import_contacts.py, before using the email features in your environment.
+> **Demo recipients.** Two example recipients ship in `contacts.json` (SG and PK). They are the author's personal test addresses used during development. Replace them with your own recipients, or add entries with `import_contacts.py`, before using the email features in your environment.
 
-1. Requirements
-Windows 10 or 11, 64-bit. Tested on Windows 11.
+---
 
-Python 3.11 (64-bit) with the Python launcher (py). Download: https://www.python.org/downloads/release/python-3119/
+## Table of contents
 
-A webcam — laptop built-in is fine. Give Windows camera permission to your terminal and to Python when prompted.
+- [1. Requirements](#1-requirements)
+- [2. Folder contents](#2-folder-contents)
+- [3. First-time setup](#3-first-time-setup)
+- [4. Calibration](#4-calibration)
+- [5. Everyday use](#5-everyday-use)
+- [6. Optional: auto-send email via Gmail SMTP](#6-optional-auto-send-email-via-gmail-smtp)
+- [7. Optional: Gemini suggestions and drafts](#7-optional-gemini-suggestions-and-drafts)
+- [8. Importing contacts from Google or Outlook](#8-importing-contacts-from-google-or-outlook)
+- [9. Testing without a camera](#9-testing-without-a-camera)
+- [10. Configuration reference](#10-configuration-reference)
+- [11. Troubleshooting](#11-troubleshooting)
+- [12. What problem this solves](#12-what-problem-this-solves)
+- [13. How it differs from existing tools](#13-how-it-differs-from-existing-tools)
+- [14. Known limitations](#14-known-limitations)
+- [15. License and attribution](#15-license-and-attribution)
 
-Internet connection for YouTube, Google, Gmail, and (optionally) Gemini.
+---
 
-A modern default browser signed into the Gmail account you want to use.
+## 1. Requirements
 
-First run installs about 800 MB (Playwright Chromium is the largest piece) and takes ~5 minutes.
+- **Windows 10 or 11, 64-bit.** Tested on Windows 11.
+- **Python 3.11 (64-bit)** with the Python launcher (`py`). [Download Python 3.11.9](https://www.python.org/downloads/release/python-3119/)
+- A **webcam** — laptop built-in is fine. Give Windows camera permission to your terminal and to Python when prompted.
+- **Internet connection** for YouTube, Google, Gmail, and (optionally) Gemini.
+- A modern default browser signed into the Gmail account you want to use.
 
-2. Folder contents
-text
+First run installs about 800 MB (Playwright Chromium is the largest piece) and takes roughly 5 minutes.
+
+---
+
+## 2. Folder contents
 iris_assistant/
-├── README.md                  This file
-├── run.bat                    One-command setup and launch
-├── run_laya.bat               Same, with the optional Laya classifier
-├── requirements.txt           Core dependencies
-├── requirements-laya.txt      Optional Laya dependency
-├── config.json                Speeds, blink timing, topics, quick words
-├── calibration.json           Created locally after first calibration
-├── contacts.json              Recipients (name, email, role, optional auto_send)
-├── contacts.example.json      Format reference
-├── contacts.example.csv       CSV import format reference
-├── favorites.json             YouTube songs and movies shown as tiles
-├── calibrate.py               Webcam + blink calibration
-├── iris_tracking.py           Camera loop, iris X and eyelid openness only
-├── horizontal_logic.py        Cursor, focus stepper, blink detectors, keyboard layout
-├── iris_control.py            The app: top bar, home screen, keyboard, review screens
-├── assistant_core.py          Request parsing and Plan objects
-├── jeff_agent.py              Gemini/OpenAI integration, email drafting, SMTP
-├── browser_actions.py         YouTube, Google, Calendar, Gmail compose
-├── assistant_cli.py           Camera-free command preview
-├── import_contacts.py         One-time local CSV importer
-├── test_horizontal_logic.py   Unit tests for eye control logic
-├── test_iris_tracking.py      Unit tests for the background camera worker
-└── test_assistant.py          Unit tests for the assistant and approval flow
+├── README.md This file
+├── run.bat One-command setup and launch
+├── run_laya.bat Same, with the optional Laya classifier
+├── requirements.txt Core dependencies
+├── requirements-laya.txt Optional Laya dependency
+├── config.json Speeds, blink timing, topics, quick words
+├── calibration.json Created locally after first calibration
+├── contacts.json Recipients (name, email, role, optional auto_send)
+├── contacts.example.json Format reference
+├── contacts.example.csv CSV import format reference
+├── favorites.json YouTube songs and movies shown as tiles
+├── calibrate.py Webcam + blink calibration
+├── iris_tracking.py Camera loop, iris X and eyelid openness only
+├── horizontal_logic.py Cursor, focus stepper, blink detectors, keyboard
+├── iris_control.py The app: top bar, home screen, keyboard, review
+├── assistant_core.py Request parsing and Plan objects
+├── jeff_agent.py Gemini/OpenAI integration, email drafting, SMTP
+├── browser_actions.py YouTube, Google, Calendar, Gmail compose
+├── assistant_cli.py Camera-free command preview
+├── import_contacts.py One-time local CSV importer
+├── test_horizontal_logic.py Unit tests for eye control logic
+├── test_iris_tracking.py Unit tests for the background camera worker
+└── test_assistant.py Unit tests for the assistant and approval flow
 
-drafts/                        Auto-created; every reviewed email saved as .eml
-.venv/                         Auto-created by run.bat
-Never commit calibration.json, contacts.json, or drafts/ to a public repository.
+drafts/ Auto-created; every reviewed email saved as .eml
+.venv/ Auto-created by run.bat
 
-3. First-time setup
-Open Command Prompt inside the folder:
+text
 
-bat
-cd C:\Users\sirja\Downloads\dance\iris_assistant
+> **Never commit** `calibration.json`, `contacts.json`, or `drafts/` to a public repository. They contain personal data. See `.gitignore`.
+
+---
+
+## 3. First-time setup
+
+Open **Command Prompt** inside the folder:
+
+```bat
+cd C:\Users\<you>\Downloads\iris_assistant
 Then run:
 
 bat
@@ -67,7 +94,7 @@ Creates .venv/ (a private Python environment for this project).
 
 Installs the packages in requirements.txt.
 
-Tries to install Playwright Chromium (optional — enables direct YouTube video opening; without it, play YouTube … opens search results).
+Tries to install Playwright Chromium (optional — enables direct YouTube video opening; without it, play YouTube ... opens search results).
 
 Launches calibrate.py and shows CENTER, LEFT, RIGHT, then CLOSE BOTH EYES. Follow each with your eyes only; keep your head still.
 
@@ -109,7 +136,7 @@ Re-center without a full calibration: from the app, CURSOR → RE-CENTER.
 
 5. Everyday use
 5.1 Moving the marker
-The green triangle at the top sits above the focused tile. Look left / right to move it. Look at screen center to stop. Hold a side glance to step repeatedly. Small accidental glances do nothing.
+The green triangle at the top sits above the focused tile. Look left or right to move it. Look at screen center to stop. Hold a side glance to step repeatedly. Small accidental glances do nothing.
 
 5.2 Selecting a tile
 Two modes:
@@ -233,7 +260,7 @@ Then close and reopen the Command Prompt.
 6.3 Common SMTP failures
 Error	Fix
 535 Authentication failed	You used your normal password, not an App Password, or you left spaces in it. Regenerate and set again with no spaces.
-534 Application-specific password required	Same — you need an App Password, and 2-Step Verification must be on.
+534 Application-specific password required	You need an App Password, and 2-Step Verification must be on.
 Connection refused / timeout	Your network blocks outbound port 587. Try 465, or a different network.
 SEND tile never appears	One of the five variables isn't set, or the recipient address is a placeholder. Re-run the echo check.
 7. Optional: Gemini suggestions and drafts
@@ -267,16 +294,16 @@ Optional OpenAI fallback: if OPENAI_API_KEY is also set, the code tries Gemini f
 8. Importing contacts from Google or Outlook
 Export contacts to CSV:
 
-Google: https://support.google.com/contacts/answer/7199294
+Google Contacts export
 
-Outlook: https://support.microsoft.com/en-us/outlook/people/import-or-export-contacts-in-outlook-using-a-csv-file
+Outlook contacts export
 
 From the project folder:
 
 bat
 .venv\Scripts\activate
 python import_contacts.py "%USERPROFILE%\Downloads\contacts.csv" --names "Sam,Priya"
---names imports only people whose name contains one of the fragments; omit to import everyone.
+--names imports only people whose name contains one of the fragments; omit it to import everyone.
 
 9. Testing without a camera
 bat
@@ -292,10 +319,12 @@ bat
 python -m unittest -v test_horizontal_logic test_assistant test_iris_tracking
 All 36 tests should pass. None need a webcam.
 
-10. Configuration reference (config.json)
+10. Configuration reference
+config.json — restart run.bat after edits.
+
 Key	Meaning
 camera_index	Which webcam. 0 is usually the built-in.
-selection_mode	"auto", "blink", or "dwell"
+selection_mode	"auto", "blink", or "dwell".
 nav_trigger	How far sideways before the marker moves. Higher = less twitchy.
 nav_hold_s	How long to hold a side glance before the first step.
 nav_repeat_s	Interval between auto-repeats while holding.
@@ -308,8 +337,6 @@ triple_blink_run	Whether triple-blink triggers RUN.
 email_topics	Topic buttons shown after picking a recipient.
 quick_words	Six shortcut words on the keyboard's QUICK page.
 gmail_account_index	Which signed-in Gmail account for compose.
-Restart run.bat after edits.
-
 11. Troubleshooting
 Problem	Fix
 App exits immediately with a traceback	Paste the traceback. Most common cause: a file wasn't overwritten with the current version.
@@ -317,12 +344,12 @@ App exits immediately with a traceback	Paste the traceback. Most common cause: a
 Marker jumps several tiles	Re-run calibrate.py. Lighting or seating changed.
 Marker never moves	Iris signal weak. Move closer, increase light.
 Marker moves but won't select	Blink too fast or too slow. Count "one-Mississippi".
-Double-blink deletes words you didn't intend	Set "double_blink_delete": false in config.json.
+Double-blink deletes unintended words	Set "double_blink_delete": false in config.json.
 YOUTUBE tile just types the word youtube	You're on the keyboard, not the home screen. The home YOUTUBE opens the submenu; the YOUTUBE quick word inserts the literal text.
 GMAIL tile doesn't appear after reviewing an email	SMTP is configured → the tile is SEND. Otherwise the tile is GMAIL.
 Email doesn't send	535 errors mean wrong App Password. See §6.3.
 Gemini drafts look identical to old messages	Gemini call failed, local template used. Check terminal for 401 / 403.
-Playwright Chromium install fails	Harmless. play YouTube … falls back to search results.
+Playwright Chromium install fails	Harmless. play YouTube ... falls back to search results.
 12. What problem this solves
 Standard assistive input devices require either hand movement (mouse, joystick, switch) or head tracking (large head-mounted sensors). For users with severe motor impairment, both are tiring or impossible. Eye gaze is the last reliable motor channel, but most gaze-tracking systems are expensive dedicated hardware.
 
@@ -363,15 +390,14 @@ The Gemini integration depends on a third-party API. If it becomes unavailable, 
 15. License and attribution
 Provided as-is for educational and personal use. Uses:
 
-MediaPipe (Apache 2.0) for face landmark detection
+MediaPipe (Apache 2.0) — face landmark detection
 
-OpenCV (Apache 2.0) for camera input
+OpenCV (Apache 2.0) — camera input
 
-PyAutoGUI (BSD) for cursor and keyboard control
+PyAutoGUI (BSD) — cursor and keyboard control
 
-Playwright (Apache 2.0) for optional YouTube result extraction
+Playwright (Apache 2.0) — optional YouTube result extraction
 
-Tkinter (PSF) for the interface
+Tkinter (PSF) — the interface
 
 Gemini and OpenAI integration are optional and governed by their own terms.
-
