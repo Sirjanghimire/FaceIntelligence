@@ -1,0 +1,44 @@
+{
+  "camera_index": 0,
+
+  "cursor_mode": "joystick",
+  "_cursor_mode_help": "joystick = turn head a little -> cursor drifts that way, face the screen -> it stops (slow, very controllable, START HERE). head = head angle sets cursor position directly (faster, needs steady head). gaze = eyes+head model from calibration.py.",
+
+  "joystick_speed_x": 0.6,
+  "joystick_speed_y": 0.6,
+  "joystick_deadzone": 0.012,
+  "joystick_curve": 1.5,
+  "_joystick_help": "speed = screen-widths per second at a firm head turn (0.3 slow, 1.0 quick). deadzone = how far you must turn before it moves at all (raise if the cursor creeps while you face the screen). curve > 1 makes small turns extra gentle and big turns faster.",
+
+  "head_gain_x": 6.0,
+  "head_gain_y": 8.0,
+  "deadzone": 0.01,
+  "_head_help": "Only used in head mode. Lower gain = more head movement needed but steadier.",
+
+  "signal_min_cutoff": 0.8,
+  "signal_beta": 0.01,
+  "smoothing_min_cutoff": 0.6,
+  "smoothing_beta": 0.003,
+  "jitter_lock_px": 3,
+  "_smoothing_help": "Two filter stages (head angles, then screen position). LOWER min_cutoff = smoother but laggier (try 0.4 if still shaky). jitter_lock_px = wobble smaller than this is ignored so a parked cursor stays parked.",
+
+  "click_gesture": "mouth",
+  "_click_gesture_help": "mouth | blink | dwell | none.  Toggle live with m / b / d keys in the debug window.",
+
+  "mouth_open_threshold": 0.32,
+  "mouth_min_hold_s": 0.12,
+  "mouth_long_hold_s": 1.0,
+  "_mouth_help": "Open mouth briefly = left click. Keep it open for long_hold seconds = right click. Cursor freezes while your mouth is open.",
+
+  "blink_threshold": 0.19,
+  "blink_min_s": 0.30,
+  "blink_max_s": 1.20,
+
+  "dwell_time_s": 0.9,
+  "dwell_radius_px": 35,
+
+  "click_cooldown_s": 0.45,
+
+  "show_debug_window": true,
+  "debug_window_scale": 0.6
+}

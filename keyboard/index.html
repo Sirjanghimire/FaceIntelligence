@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Face Keyboard</title>
+<style>
+  :root {
+    --bg: #14213d;        /* deep navy: low glare for long sessions */
+    --ink: #f4f6fb;       /* text on navy */
+    --key: #e8edf2;       /* letter tiles */
+    --key-ink: #14213d;
+    --hot: #ffb703;       /* hover / selected: amber, readable against both */
+    --act: #4a5a7a;       /* action keys */
+    --act-ink: #ffffff;
+    --pred: #a7e8d8;      /* predicted words */
+    --pred-ink: #0f2a25;
+    --danger: #e76f51;
+    --gap: 0.6vmin;
+    --radius: 1.4vmin;
+    font-family: "Atkinson Hyperlegible", "Segoe UI", Roboto, system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--ink); overflow: hidden; user-select: none; }
+
+  #app { height: 100%; display: grid; grid-template-rows: 21vh 11vh 1fr 5.5vh; gap: var(--gap); padding: var(--gap); }
+
+  /* ---- what you have written -------------------------------------- */
+  #screen {
+    display: flex; align-items: flex-end; padding: 1.5vmin 2.5vmin;
+    font-size: clamp(28px, 6.5vh, 90px); line-height: 1.15; letter-spacing: 0.01em;
+    overflow: hidden; border-bottom: 2px solid #2d3d63;
+  }
+  #screen .text { max-height: 100%; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; word-break: break-word; }
+  #screen .cursor { display: inline-block; width: 0.08em; height: 0.9em; background: var(--hot); vertical-align: -0.1em; animation: blink 1.1s steps(2) infinite; }
+  @keyframes blink { to { opacity: 0; } }
+  #screen .empty { color: #6d7ea3; }
+  @media (prefers-reduced-motion: reduce) { #screen .cursor { animation: none; } }
+
+  /* ---- predictions ------------------------------------------------ */
+  #predictions { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: var(--gap); }
+
+  /* ---- keys ------------------------------------------------------- */
+  #keys { display: grid; gap: var(--gap); }
+  .key {
+    position: relative; display: flex; align-items: center; justify-content: center;
+    background: var(--key); color: var(--key-ink); border: 0; border-radius: var(--radius);
+    font: inherit; font-size: clamp(22px, 5.2vh, 72px); font-weight: 600; cursor: pointer;
+    overflow: hidden; transition: transform 90ms ease, background-color 90ms ease;
+  }
+  .key.act { background: var(--act); color: var(--act-ink); font-size: clamp(16px, 3.4vh, 44px); font-weight: 600; }
+  .key.pred { background: var(--pred); color: var(--pred-ink); font-size: clamp(20px, 4.2vh, 60px); }
+  .key.danger { background: var(--danger); color: #fff; }
+  .key.group { font-size: clamp(22px, 4.4vh, 60px); letter-spacing: 0.06em; }
+  .key.wide { grid-column: span 2; }
+  .key.xwide { grid-column: span 3; }
+  .key:hover, .key.hover { background: var(--hot); color: var(--key-ink); transform: scale(1.03); z-index: 1; }
+  .key:focus-visible { outline: 4px solid var(--hot); outline-offset: -4px; }
+  .key:active, .key.pressed { transform: scale(0.96); filter: brightness(0.92); }
+  .key .ring {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    background: conic-gradient(rgba(20,33,61,0.35) calc(var(--p) * 1%), transparent 0);
+  }
+  .key.dwelling .ring { opacity: 1; }
+  .key.disabled { opacity: 0.35; pointer-events: none; }
+
+  /* ---- bottom bar ------------------------------------------------- */
+  #bar { display: flex; gap: var(--gap); align-items: stretch; font-size: clamp(12px, 2.2vh, 20px); }
+  #bar button {
+    flex: 1; background: #1f2f52; color: var(--ink); border: 0; border-radius: 0.8vmin;
+    font: inherit; font-size: inherit; cursor: pointer; padding: 0 1vmin;
+  }
+  #bar button:hover { background: var(--hot); color: var(--key-ink); }
+  #bar button.on { background: #2f6b5f; }
+  #bar .msg { flex: 2; display: flex; align-items: center; padding: 0 1.5vmin; color: #9fb0d4; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="screen"><div class="text" id="screenText"></div></div>
+  <div id="predictions"></div>
+  <div id="keys"></div>
+  <div id="bar">
+    <button id="layoutBtn" title="Change key layout">Layout: QWERTY</button>
+    <button id="dwellBtn" title="Click by holding the cursor still">Dwell: off</button>
+    <button id="autoSpeakBtn" title="Speak each sentence when you type . ? or !">Auto-speak: on</button>
+    <button id="phrasesBtn" title="Quick phrases">Phrases</button>
+    <div class="msg" id="msg">Point with your head, open your mouth to click.</div>
+  </div>
+</div>
+
+<script>
+/* =====================================================================
+   STATE
+   ===================================================================== */
+const S = {
+  text: "",
+  history: [],
+  layout: "qwerty",          // qwerty | abc | groups | numbers | phrases
+  groupPool: null,           // letters left in groups mode
+  dwellMs: 0,                // 0 = off (mouth click from Python does the clicking)
+  autoSpeak: true,
+  lastLayout: "qwerty",
+};
+
+const LAYOUTS = {
+  qwerty: ["qwertyuiop", "asdfghjkl", "zxcvbnm"],
+  abc:    ["abcdefghij", "klmnopqrs", "tuvwxyz"],
+};
+const NUMBERS = ["1234567890", "@#$%&*()-+", "'\"/:;=_"];
+const ALPHABET = "abcdefghijklmnopqrstuvwxyz".split("");
+const PHRASES = ["Yes", "No", "Help me please", "Thank you", "I need water", "I need the bathroom",
+                 "I am in pain", "I am tired", "Call someone", "Turn on the TV", "I am fine", "Wait a moment"];
+
+/* Small built-in vocabulary. Words you type are learned on top of this. */
+const COMMON = ("the of and to a in is it you that he was for on are with as i his they be at one have this from " +
+  "or had by hot but some what there we can out other were all your when up use word how said an each she which do " +
+  "their time if will way about many then them would write like so these her long make thing see him two has look " +
+  "more day could go come did my sound no most number who over know water than call first people may down side been " +
+  "now find any new work part take get place made live where after back little only round man year came show every " +
+  "good me give our under name very through just form much great think say help low line before turn cause same mean " +
+  "differ move right boy old too does tell sentence set three want air well also play small end put home read hand " +
+  "port large spell add even land here must big high such follow act why ask men change went light kind off need " +
+  "house picture try us again animal point mother world near build self earth father head stand own page should " +
+  "country found answer school grow study still learn plant cover food sun four thought let keep eye never last door " +
+  "between city tree cross since hard start might story saw far sea draw left late run don't while press close night " +
+  "real life few stop open seem together next white children begin got walk example ease paper often always music " +
+  "those both mark book letter until mile river car feet care second group carry took rain eat room friend began idea " +
+  "fish mountain north once base hear horse cut sure watch color face wood main enough plain girl usual young ready " +
+  "above ever red list though feel talk bird soon body dog family direct pose leave song measure state product black " +
+  "short numeral class wind question happen complete ship area half rock order fire south problem piece told knew pass " +
+  "farm top whole king size heard best hour better true during hundred am remember step early hold west ground " +
+  "interest reach fast five sing listen six table travel less morning ten simple several vowel toward war lay against " +
+  "pattern slow center love person money serve appear road map science rule govern pull cold notice voice fall power " +
+  "town fine certain fly unit lead cry dark machine note wait plan figure star box noun field rest correct able pound " +
+  "done beauty drive stood contain front teach week final gave green oh quick develop sleep warm free minute strong " +
+  "special mind behind clear tail produce fact street inch lot nothing course stay wheel full force blue object decide " +
+  "surface deep moon island foot yet busy test record boat common gold possible plane age dry wonder laugh thousand " +
+  "ago ran check game shape yes hot miss brought heat snow bed bring sit perhaps fill east weight language among " +
+  "please hello okay sorry tired hungry thirsty pain doctor nurse bathroom medicine phone tv youtube video open close " +
+  "search scroll play pause louder quieter light lights on off tomorrow today tonight yesterday morning afternoon " +
+  "evening bed pillow blanket cold hot window curtain chair move up down left right stop go want need feel love like").split(" ");
+
+let VOCAB = {};    // word -> score
+let BIGRAM = {};   // prevWord -> {word: count}
+
+function loadMemory() {
+  COMMON.forEach((w, i) => { VOCAB[w] = Math.max(VOCAB[w] || 0, COMMON.length - i); });
+  try {
+    const saved = JSON.parse(localStorage.getItem("faceKeyboardMemory") || "{}");
+    for (const [w, n] of Object.entries(saved.vocab || {})) VOCAB[w] = (VOCAB[w] || 0) + n * 400;
+    BIGRAM = saved.bigram || {};
+  } catch (e) { /* storage unavailable: fine, we just don't remember */ }
+}
+function saveMemory(word, prev) {
+  try {
+    const saved = JSON.parse(localStorage.getItem("faceKeyboardMemory") || "{}");
+    saved.vocab = saved.vocab || {}; saved.bigram = saved.bigram || {};
+    saved.vocab[word] = (saved.vocab[word] || 0) + 1;
+    if (prev) { saved.bigram[prev] = saved.bigram[prev] || {}; saved.bigram[prev][word] = (saved.bigram[prev][word] || 0) + 1; }
+    localStorage.setItem("faceKeyboardMemory", JSON.stringify(saved));
+    VOCAB[word] = (VOCAB[word] || 0) + 400;
+    BIGRAM = saved.bigram;
+  } catch (e) {}
+}
+
+/* =====================================================================
+   TEXT HELPERS
+   ===================================================================== */
+function currentWord() { const m = S.text.match(/([A-Za-z']+)$/); return m ? m[1] : ""; }
+function previousWord() {
+  const stripped = S.text.replace(/[A-Za-z']+$/, "").trim();
+  const m = stripped.match(/([A-Za-z']+)[.!?,]*$/); return m ? m[1].toLowerCase() : "";
+}
+function needsCapital() { return /^\s*$/.test(S.text) || /[.!?]\s*$/.test(S.text); }
+function pushHistory() { S.history.push(S.text); if (S.history.length > 200) S.history.shift(); }
+
+function typeChar(ch) {
+  pushHistory();
+  if (/[a-z]/.test(ch) && needsCapital()) ch = ch.toUpperCase();
+  if (/[.,!?]/.test(ch)) { S.text = S.text.replace(/\s+$/, ""); }
+  S.text += ch;
+  if (/[.!?]/.test(ch)) { S.text += " "; if (S.autoSpeak) speak(lastSentence()); }
+  render();
+}
+function typeWord(word) {
+  pushHistory();
+  const prev = previousWord();
+  S.text = S.text.replace(/[A-Za-z']+$/, "");
+  if (needsCapital()) word = word[0].toUpperCase() + word.slice(1);
+  S.text += word + " ";
+  saveMemory(word.toLowerCase(), prev);
+  render();
+}
+function space() {
+  pushHistory();
+  const w = currentWord();
+  if (w) saveMemory(w.toLowerCase(), previousWord());
+  if (!/\s$/.test(S.text) && S.text) S.text += " ";
+  render();
+}
+function backspace() { pushHistory(); S.text = S.text.replace(/\s+$/, "").slice(0, -1); render(); }
+function deleteWord() { pushHistory(); S.text = S.text.replace(/\s*[^\s]*\s*$/, ""); if (S.text) S.text += " "; render(); }
+function undo() { if (S.history.length) { S.text = S.history.pop(); render(); } }
+function clearAll() { pushHistory(); S.text = ""; render(); }
+function lastSentence() { const parts = S.text.trim().split(/(?<=[.!?])\s+/); return parts[parts.length - 1] || ""; }
+
+function speak(t) {
+  t = (t || S.text).trim(); if (!t) { message("Nothing to say yet."); return; }
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(t); u.rate = 1.0; speechSynthesis.speak(u); message("Speaking: " + t); }
+  catch (e) { message("Speech is not available in this browser."); }
+}
+async function copyText() {
+  try { await navigator.clipboard.writeText(S.text); message("Copied. Paste it anywhere with Ctrl+V."); }
+  catch (e) { message("Could not copy — open this file in Chrome or Edge."); }
+}
+
+/* =====================================================================
+   PREDICTION
+   ===================================================================== */
+function predictions(n = 4) {
+  const prefix = currentWord().toLowerCase();
+  const prev = previousWord();
+  let cands;
+  if (prefix) {
+    cands = Object.keys(VOCAB).filter(w => w.startsWith(prefix) && w !== prefix);
+    const bg = BIGRAM[prev] || {};
+    cands.sort((a, b) => ((VOCAB[b] || 0) + (bg[b] || 0) * 800) - ((VOCAB[a] || 0) + (bg[a] || 0) * 800));
+    if (prefix.length >= 2 && !VOCAB[prefix]) cands.unshift(prefix);   // let a new word through
+  } else {
+    const bg = BIGRAM[prev] || {};
+    const next = Object.keys(bg).sort((a, b) => bg[b] - bg[a]);
+    const starters = ["i", "the", "yes", "no", "please", "can", "you", "help", "thank"];
+    cands = [...new Set([...next, ...starters])];
+  }
+  return cands.slice(0, n);
+}
+
+/* =====================================================================
+   RENDER
+   ===================================================================== */
+const $ = id => document.getElementById(id);
+
+function key(label, onSelect, cls = "", attrs = {}) {
+  const b = document.createElement("button");
+  b.className = "key " + cls; b.type = "button";
+  b.innerHTML = `<span>${label}</span><span class="ring"></span>`;
+  b.addEventListener("click", () => { flash(b); onSelect(); });
+  Object.assign(b.dataset, attrs);
+  return b;
+}
+function flash(b) { b.classList.add("pressed"); setTimeout(() => b.classList.remove("pressed"), 120); }
+
+function render() {
+  // text
+  const st = $("screenText");
+  st.innerHTML = S.text ? escapeHtml(S.text) + '<span class="cursor"></span>'
+                        : '<span class="empty">Start typing…</span><span class="cursor"></span>';
+  // predictions
+  const P = $("predictions"); P.innerHTML = "";
+  predictions(4).forEach(w => P.appendChild(key(w, () => typeWord(w), "pred")));
+
+  // keys
+  const K = $("keys"); K.innerHTML = "";
+  if (S.layout === "qwerty" || S.layout === "abc") renderLetters(K, LAYOUTS[S.layout]);
+  else if (S.layout === "numbers") renderLetters(K, NUMBERS, true);
+  else if (S.layout === "groups") renderGroups(K);
+  else if (S.layout === "phrases") renderPhrases(K);
+
+  $("layoutBtn").textContent = "Layout: " + ({qwerty: "QWERTY", abc: "ABC", groups: "Groups", numbers: "123", phrases: "Phrases"})[S.layout];
+  $("dwellBtn").textContent = "Dwell: " + (S.dwellMs ? S.dwellMs + " ms" : "off");
+  $("dwellBtn").classList.toggle("on", !!S.dwellMs);
+  $("autoSpeakBtn").textContent = "Auto-speak: " + (S.autoSpeak ? "on" : "off");
+  $("autoSpeakBtn").classList.toggle("on", S.autoSpeak);
+}
+
+function renderLetters(K, rows, symbols = false) {
+  const cols = 10;
+  K.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  K.style.gridTemplateRows = `repeat(4, 1fr)`;
+  rows.forEach((row, r) => {
+    const chars = row.split("");
+    const pad = cols - chars.length;
+    if (r === 2 && !symbols) {
+      // bottom letter row: put punctuation at the ends so the row stays full
+      K.appendChild(key(".", () => typeChar("."), "act"));
+      chars.forEach(c => K.appendChild(key(c, () => typeChar(c))));
+      K.appendChild(key("?", () => typeChar("?"), "act"));
+      K.appendChild(key("!", () => typeChar("!"), "act"));
+    } else {
+      chars.forEach(c => K.appendChild(key(c, () => typeChar(c))));
+      for (let i = 0; i < pad; i++) {
+        if (r === 1 && i === 0) K.appendChild(key(",", () => typeChar(","), "act"));
+        else if (r === 2 && symbols && i === 0) K.appendChild(key("abc", () => setLayout(S.lastLayout), "act", {}));
+        else K.appendChild(key("", () => {}, "act disabled"));
+      }
+    }
+  });
+  // action row
+  K.appendChild(key(symbols ? "abc" : "123", () => symbols ? setLayout(S.lastLayout) : setLayout("numbers"), "act"));
+  K.appendChild(key("Undo", undo, "act"));
+  K.appendChild(key("Space", space, "act xwide"));
+  K.appendChild(key("⌫", backspace, "act"));
+  K.appendChild(key("Delete word", deleteWord, "act wide"));
+  K.appendChild(key("Speak", () => speak(), "act"));
+  K.appendChild(key("Copy", copyText, "act"));
+}
+
+function renderGroups(K) {
+  // Binary splitting: fewer, huge targets. Good when pointing is imprecise.
+  const pool = S.groupPool || ALPHABET;
+  K.style.gridTemplateColumns = "repeat(6, 1fr)";
+  K.style.gridTemplateRows = "1fr 1fr 1fr";
+  if (pool.length <= 6) {
+    pool.forEach(c => K.appendChild(key(c, () => { S.groupPool = null; typeChar(c); }, "group")));
+    for (let i = pool.length; i < 6; i++) K.appendChild(key("", () => {}, "act disabled"));
+  } else {
+    const parts = pool.length > 12 ? 3 : 2;
+    const size = Math.ceil(pool.length / parts);
+    const span = parts === 3 ? "wide" : "xwide";
+    for (let i = 0; i < parts; i++) {
+      const slice = pool.slice(i * size, (i + 1) * size);
+      if (!slice.length) continue;
+      K.appendChild(key(`${slice[0].toUpperCase()} – ${slice[slice.length - 1].toUpperCase()}`,
+        () => { S.groupPool = slice; render(); }, "group " + span));
+    }
+  }
+  const back = key("Back", () => { S.groupPool = null; render(); }, "act wide");
+  if (!S.groupPool) back.classList.add("disabled");
+  K.appendChild(back);
+  K.appendChild(key(".", () => typeChar("."), "act"));
+  K.appendChild(key("?", () => typeChar("?"), "act"));
+  K.appendChild(key("Undo", undo, "act wide"));
+  K.appendChild(key("Space", space, "act wide"));
+  K.appendChild(key("⌫", backspace, "act"));
+  K.appendChild(key("Delete word", deleteWord, "act"));
+  K.appendChild(key("Speak", () => speak(), "act wide"));
+}
+
+function renderPhrases(K) {
+  K.style.gridTemplateColumns = "repeat(3, 1fr)";
+  K.style.gridTemplateRows = "repeat(5, 1fr)";
+  PHRASES.forEach(p => K.appendChild(key(p, () => { pushHistory(); S.text += p + ". "; render(); speak(p); }, "pred")));
+  K.appendChild(key("Back to keys", () => setLayout(S.lastLayout), "act"));
+  K.appendChild(key("Clear all", clearAll, "act danger"));
+  K.appendChild(key("Speak", () => speak(), "act"));
+}
+
+function setLayout(l) {
+  if (["qwerty", "abc", "groups"].includes(S.layout)) S.lastLayout = S.layout;
+  S.layout = l; S.groupPool = null; render();
+}
+function escapeHtml(t) { return t.replace(/[&<>]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;"}[c])); }
+function message(t) { $("msg").textContent = t; }
+
+/* =====================================================================
+   DWELL CLICK (in-browser alternative to the mouth gesture)
+   ===================================================================== */
+let dwellEl = null, dwellStart = 0, dwellRaf = 0, dwellDone = false, lastDwellClick = null;
+function dwellTick(t) {
+  if (!dwellEl || !S.dwellMs) return;
+  const p = Math.min(1, (t - dwellStart) / S.dwellMs);
+  dwellEl.style.setProperty("--p", (p * 100).toFixed(1));
+  if (p >= 1 && !dwellDone) { dwellDone = true; lastDwellClick = lastPointer; dwellEl.classList.remove("dwelling"); dwellEl.click(); return; }
+  dwellRaf = requestAnimationFrame(dwellTick);
+}
+let lastPointer = {x: 0, y: 0};
+document.addEventListener("pointermove", e => {
+  lastPointer = {x: e.clientX, y: e.clientY};
+  // after a dwell click you must move away (~40 px) before another dwell can start
+  if (lastDwellClick && Math.hypot(e.clientX - lastDwellClick.x, e.clientY - lastDwellClick.y) > 40) lastDwellClick = null;
+  const el = e.target.closest(".key");
+  if (el === dwellEl) return;
+  if (dwellEl) { dwellEl.classList.remove("dwelling", "hover"); dwellEl.style.removeProperty("--p"); }
+  cancelAnimationFrame(dwellRaf);
+  dwellEl = el && !el.classList.contains("disabled") ? el : null;
+  dwellDone = false;
+  if (dwellEl) {
+    dwellEl.classList.add("hover");
+    if (S.dwellMs && !lastDwellClick) { dwellEl.classList.add("dwelling"); dwellStart = performance.now(); dwellRaf = requestAnimationFrame(dwellTick); }
+  }
+});
+// after a re-render the hovered element is gone; forget it so dwell re-arms cleanly
+const mo = new MutationObserver(() => { if (dwellEl && !document.contains(dwellEl)) { dwellEl = null; cancelAnimationFrame(dwellRaf); } });
+mo.observe($("app"), { childList: true, subtree: true });
+
+/* =====================================================================
+   BOTTOM BAR + PHYSICAL KEYBOARD (handy for your teammate while testing)
+   ===================================================================== */
+$("layoutBtn").addEventListener("click", () => setLayout({qwerty: "abc", abc: "groups", groups: "qwerty"}[S.layout] || "qwerty"));
+$("dwellBtn").addEventListener("click", () => { S.dwellMs = {0: 1000, 1000: 800, 800: 600, 600: 0}[S.dwellMs] ?? 0; render(); });
+$("autoSpeakBtn").addEventListener("click", () => { S.autoSpeak = !S.autoSpeak; render(); });
+$("phrasesBtn").addEventListener("click", () => setLayout(S.layout === "phrases" ? S.lastLayout : "phrases"));
+
+document.addEventListener("keydown", e => {
+  if (e.key.length === 1 && /[a-z.,!? ]/i.test(e.key)) { e.key === " " ? space() : typeChar(e.key.toLowerCase()); }
+  else if (e.key === "Backspace") backspace();
+  else if (e.key === "Enter") speak();
+  else if (e.key === "Escape") undo();
+});
+
+loadMemory();
+render();
+</script>
+</body>
+</html>
