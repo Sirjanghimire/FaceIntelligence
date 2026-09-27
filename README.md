@@ -1,403 +1,1535 @@
 # Iris Assistant
 
-A webcam-only eye-controlled desktop assistant for Windows. The system tracks **one axis of your irises** — horizontal movement only — and turns small side glances into full control of a tile-based interface at the top of the screen. Blink to select. In under a second you can open YouTube and play a favorite, run a Google search, or send an email to a saved recipient. The entire screen becomes reachable through eye movement alone; hands never leave your lap.
+**Iris Assistant** is a webcam-only, eye-controlled desktop assistant for Windows.
 
-The project is designed for users for whom hand or head movement is unreliable or impossible, and it is built entirely on open-source components that run on the webcam already present on most laptops. It does not require dedicated eye-tracking hardware.
+The system tracks **one axis of your irises — horizontal movement only** — and converts small side glances into control of a tile-based interface positioned at the top of the screen.
 
-**What it does, in one line:** iris glances move a marker across tiles, a both-eye blink selects the tile, and the selected action — open a website, play a video, compose and send mail — is executed with an explicit review step unless the user has opted in to auto-send for a specific contact.
+Look left or right to move between tiles. Blink to select.
 
-> **Demo recipients.** Two example recipients ship in `contacts.json` (SG and PK). They are the author's personal test addresses used during development. Replace them with your own recipients, or add entries with `import_contacts.py`, before using the email features in your environment.
+With only eye movement, a user can:
 
----
+- Open YouTube and play saved favorites
+- Search Google
+- Compose and send emails
+- Type using an on-screen keyboard
+- Control the Windows cursor
+- Click, scroll, paste, and navigate desktop applications
 
-## Table of contents
+The system is designed for users for whom **hand or head movement is unreliable, difficult, or impossible**.
 
-- [1. Requirements](#1-requirements)
-- [2. Folder contents](#2-folder-contents)
-- [3. First-time setup](#3-first-time-setup)
-- [4. Calibration](#4-calibration)
-- [5. Everyday use](#5-everyday-use)
-- [6. Optional: auto-send email via Gmail SMTP](#6-optional-auto-send-email-via-gmail-smtp)
-- [7. Optional: Gemini suggestions and drafts](#7-optional-gemini-suggestions-and-drafts)
-- [8. Importing contacts from Google or Outlook](#8-importing-contacts-from-google-or-outlook)
-- [9. Testing without a camera](#9-testing-without-a-camera)
-- [10. Configuration reference](#10-configuration-reference)
-- [11. Troubleshooting](#11-troubleshooting)
-- [12. What problem this solves](#12-what-problem-this-solves)
-- [13. How it differs from existing tools](#13-how-it-differs-from-existing-tools)
-- [14. Known limitations](#14-known-limitations)
-- [15. License and attribution](#15-license-and-attribution)
+It uses open-source components and works with the webcam already built into most laptops. **No dedicated eye-tracking hardware is required.**
 
 ---
 
-## 1. Requirements
+## How It Works
 
-- **Windows 10 or 11, 64-bit.** Tested on Windows 11.
-- **Python 3.11 (64-bit)** with the Python launcher (`py`). [Download Python 3.11.9](https://www.python.org/downloads/release/python-3119/)
-- A **webcam** — laptop built-in is fine. Give Windows camera permission to your terminal and to Python when prompted.
-- **Internet connection** for YouTube, Google, Gmail, and (optionally) Gemini.
-- A modern default browser signed into the Gmail account you want to use.
+> **In one line:** Iris glances move a marker across large interface tiles, a both-eye blink selects the focused tile, and the selected action is executed with an explicit review step unless the user has intentionally enabled auto-send for a specific email contact.
 
-First run installs about 800 MB (Playwright Chromium is the largest piece) and takes roughly 5 minutes.
+The system deliberately tracks only **horizontal iris movement**.
+
+Horizontal movement is generally more stable with ordinary webcams than vertical gaze estimation. The same horizontal signal can therefore be reused for different interaction modes, including vertical cursor control.
 
 ---
 
-## 2. Folder contents
-iris_assistant/
-├── README.md This file
-├── run.bat One-command setup and launch
-├── run_laya.bat Same, with the optional Laya classifier
-├── requirements.txt Core dependencies
-├── requirements-laya.txt Optional Laya dependency
-├── config.json Speeds, blink timing, topics, quick words
-├── calibration.json Created locally after first calibration
-├── contacts.json Recipients (name, email, role, optional auto_send)
-├── contacts.example.json Format reference
-├── contacts.example.csv CSV import format reference
-├── favorites.json YouTube songs and movies shown as tiles
-├── calibrate.py Webcam + blink calibration
-├── iris_tracking.py Camera loop, iris X and eyelid openness only
-├── horizontal_logic.py Cursor, focus stepper, blink detectors, keyboard
-├── iris_control.py The app: top bar, home screen, keyboard, review
-├── assistant_core.py Request parsing and Plan objects
-├── jeff_agent.py Gemini/OpenAI integration, email drafting, SMTP
-├── browser_actions.py YouTube, Google, Calendar, Gmail compose
-├── assistant_cli.py Camera-free command preview
-├── import_contacts.py One-time local CSV importer
-├── test_horizontal_logic.py Unit tests for eye control logic
-├── test_iris_tracking.py Unit tests for the background camera worker
-└── test_assistant.py Unit tests for the assistant and approval flow
+## Demo Recipients
 
-drafts/ Auto-created; every reviewed email saved as .eml
-.venv/ Auto-created by run.bat
+Two example recipients are included in `contacts.json`:
 
-text
+- `SG`
+- `PK`
 
-> **Never commit** `calibration.json`, `contacts.json`, or `drafts/` to a public repository. They contain personal data. See `.gitignore`.
+These are personal test addresses used during development.
+
+Before using the email features, replace them with your own contacts or import contacts using `import_contacts.py`.
+
+> **Privacy note:** Never upload your personal `contacts.json`, `calibration.json`, or generated email drafts to a public repository.
 
 ---
 
-## 3. First-time setup
+## Table of Contents
 
-Open **Command Prompt** inside the folder:
+1. [Requirements](#1-requirements)
+2. [Folder Structure](#2-folder-structure)
+3. [First-Time Setup](#3-first-time-setup)
+4. [Calibration](#4-calibration)
+5. [Everyday Use](#5-everyday-use)
+6. [Optional: Gmail SMTP Auto-Send](#6-optional-gmail-smtp-auto-send)
+7. [Optional: Gemini Suggestions and Drafts](#7-optional-gemini-suggestions-and-drafts)
+8. [Importing Contacts](#8-importing-contacts)
+9. [Testing Without a Camera](#9-testing-without-a-camera)
+10. [Configuration Reference](#10-configuration-reference)
+11. [Troubleshooting](#11-troubleshooting)
+12. [What Problem This Solves](#12-what-problem-this-solves)
+13. [How It Differs From Existing Tools](#13-how-it-differs-from-existing-tools)
+14. [Known Limitations](#14-known-limitations)
+15. [License and Attribution](#15-license-and-attribution)
+
+---
+
+# 1. Requirements
+
+### Operating System
+
+- **Windows 10 or Windows 11**
+- 64-bit system
+- Tested primarily on Windows 11
+
+### Python
+
+Install:
+
+**Python 3.11, 64-bit**
+
+The Python launcher command `py` should also be available.
+
+Download Python 3.11.9:
+
+https://www.python.org/downloads/release/python-3119/
+
+Verify the installation:
 
 ```bat
-cd C:\Users\<you>\Downloads\iris_assistant
+py -3.11 --version
+```
+
+### Webcam
+
+A standard webcam is required.
+
+A laptop's built-in webcam is sufficient.
+
+Make sure Windows allows camera access for:
+
+- Python
+- Command Prompt / Terminal
+- Desktop applications
+
+### Internet Connection
+
+Internet access is required for features such as:
+
+- YouTube
+- Google Search
+- Gmail
+- Gemini
+- OpenAI fallback
+
+The core interface and local fallback logic can still operate without cloud AI services.
+
+### Browser
+
+A modern default browser is recommended.
+
+For Gmail features, sign into the Gmail account you want Iris Assistant to use.
+
+---
+
+## First-Run Download Size
+
+The first installation may download approximately **800 MB** of dependencies.
+
+The largest component is usually Playwright Chromium.
+
+Installation time depends on your internet connection.
+
+---
+
+# 2. Folder Structure
+
+```text
+iris_assistant/
+│
+├── README.md
+├── run.bat
+├── run_laya.bat
+├── requirements.txt
+├── requirements-laya.txt
+│
+├── config.json
+├── calibration.json
+├── contacts.json
+├── contacts.example.json
+├── contacts.example.csv
+├── favorites.json
+│
+├── calibrate.py
+├── iris_tracking.py
+├── horizontal_logic.py
+├── iris_control.py
+├── assistant_core.py
+├── jeff_agent.py
+├── browser_actions.py
+├── assistant_cli.py
+├── import_contacts.py
+│
+├── test_horizontal_logic.py
+├── test_iris_tracking.py
+├── test_assistant.py
+│
+├── drafts/
+└── .venv/
+```
+
+### Main Files
+
+| File | Purpose |
+|---|---|
+| `README.md` | Project documentation |
+| `run.bat` | One-command setup and launch |
+| `run_laya.bat` | Launches with the optional Laya classifier |
+| `requirements.txt` | Core Python dependencies |
+| `requirements-laya.txt` | Optional Laya dependencies |
+| `config.json` | Navigation speeds, blink timing, topics, quick words, and other settings |
+| `calibration.json` | Generated locally after calibration |
+| `contacts.json` | Saved email recipients |
+| `contacts.example.json` | Example contact format |
+| `contacts.example.csv` | Example CSV import format |
+| `favorites.json` | Saved YouTube songs and movies |
+| `calibrate.py` | Webcam and blink calibration |
+| `iris_tracking.py` | Camera loop and iris/eyelid tracking |
+| `horizontal_logic.py` | Navigation, blink detection, and cursor logic |
+| `iris_control.py` | Main graphical application |
+| `assistant_core.py` | Request parsing and assistant plan objects |
+| `jeff_agent.py` | Gemini/OpenAI integration, email drafting, and SMTP |
+| `browser_actions.py` | YouTube, Google, Gmail, and browser actions |
+| `assistant_cli.py` | Camera-free command preview |
+| `import_contacts.py` | Local CSV contact importer |
+| `test_horizontal_logic.py` | Unit tests for eye-control logic |
+| `test_iris_tracking.py` | Unit tests for the camera worker |
+| `test_assistant.py` | Assistant and approval-flow tests |
+| `drafts/` | Automatically created folder containing reviewed `.eml` drafts |
+| `.venv/` | Automatically created Python virtual environment |
+
+---
+
+## Files That Should Never Be Committed
+
+Do **not** commit the following to a public repository:
+
+```text
+calibration.json
+contacts.json
+drafts/
+.venv/
+```
+
+These files may contain:
+
+- Personal contact information
+- Calibration data
+- Email content
+- Locally generated application data
+
+Add them to `.gitignore`.
+
+Example:
+
+```gitignore
+.venv/
+calibration.json
+contacts.json
+drafts/
+__pycache__/
+*.pyc
+.env
+```
+
+---
+
+# 3. First-Time Setup
+
+Open **Command Prompt** inside the project folder.
+
+Example:
+
+```bat
+cd C:\Users\<your-username>\Downloads\iris_assistant
+```
+
+Verify Python:
+
+```bat
+py -3.11 --version
+```
+
 Then run:
 
-bat
-py -3.11 --version
+```bat
 run.bat
-run.bat on first run:
+```
 
-Creates .venv/ (a private Python environment for this project).
+---
 
-Installs the packages in requirements.txt.
+## What `run.bat` Does
 
-Tries to install Playwright Chromium (optional — enables direct YouTube video opening; without it, play YouTube ... opens search results).
+On the first run, the script:
 
-Launches calibrate.py and shows CENTER, LEFT, RIGHT, then CLOSE BOTH EYES. Follow each with your eyes only; keep your head still.
+1. Creates a private Python virtual environment:
 
-Saves calibration.json and launches the app.
+```text
+.venv/
+```
 
-Later runs skip steps 1–4 and jump straight into the app.
+2. Installs the dependencies listed in:
 
-If the wrong camera is picked: open config.json, change "camera_index" to 1, delete calibration.json, and run run.bat again.
+```text
+requirements.txt
+```
 
-4. Calibration
-Calibration is the single most important step. If it's wrong, nothing works.
+3. Attempts to install Playwright Chromium.
 
-To redo calibration:
+Playwright is optional but enables more direct YouTube navigation.
 
-bat
+If Playwright is unavailable, commands such as:
+
+```text
+play YouTube ...
+```
+
+fall back to opening YouTube search results.
+
+4. Launches `calibrate.py`.
+
+5. Guides the user through:
+
+```text
+CENTER
+LEFT
+RIGHT
+CLOSE BOTH EYES
+```
+
+6. Saves the result as:
+
+```text
+calibration.json
+```
+
+7. Launches Iris Assistant.
+
+---
+
+## Later Runs
+
+After the environment and calibration file already exist, running:
+
+```bat
+run.bat
+```
+
+skips most installation steps and launches the application directly.
+
+---
+
+## Wrong Camera Selected
+
+If Iris Assistant opens the wrong webcam, edit:
+
+```text
+config.json
+```
+
+Change:
+
+```json
+"camera_index": 0
+```
+
+to:
+
+```json
+"camera_index": 1
+```
+
+Then delete:
+
+```text
+calibration.json
+```
+
+and run:
+
+```bat
+run.bat
+```
+
+again.
+
+---
+
+# 4. Calibration
+
+Calibration is one of the most important parts of the system.
+
+Poor calibration can cause:
+
+- Incorrect navigation
+- Excessive marker movement
+- No movement
+- Missed blinks
+- Accidental selections
+
+To recalibrate manually:
+
+```bat
 .venv\Scripts\activate
 python calibrate.py
-Follow the on-screen dots. Full calibration takes about 15 seconds.
+```
 
-What it measures:
+Follow the on-screen targets.
 
-Where your irises sit when you look at the center of the screen.
+Typical calibration takes approximately **15 seconds**.
 
-How far they move when you look left and right.
+---
 
-How closed your eyelids get during a deliberate blink vs. a natural one. If this step is unreliable, the app automatically switches to dwell selection — you hold your gaze on a tile for 0.85 s instead of blinking.
+## What Calibration Measures
 
-Tips:
+The calibration process estimates:
 
-Even, front-facing light. Avoid a window behind you.
+### Neutral Iris Position
 
-Sit roughly arm's length from the screen.
+Where the user's irises sit while looking at the center of the display.
 
-Move only your eyes during calibration, not your head.
+### Left and Right Range
 
-If it says "Horizontal iris signal is too weak", move closer and increase light on both eyes.
+How far the iris moves when looking:
 
-Re-center without a full calibration: from the app, CURSOR → RE-CENTER.
+- Left
+- Center
+- Right
 
-5. Everyday use
-5.1 Moving the marker
-The green triangle at the top sits above the focused tile. Look left or right to move it. Look at screen center to stop. Hold a side glance to step repeatedly. Small accidental glances do nothing.
+### Eyelid Closure
 
-5.2 Selecting a tile
-Two modes:
+How closed the eyelids become during an intentional selection blink compared with ordinary blinking.
 
-Blink mode (default when calibration succeeds). Hold both eyes closed for 0.4–0.8 seconds, then open.
+If blink detection is unreliable, Iris Assistant can automatically fall back to **dwell selection**.
 
-Dwell mode (automatic fallback). Look steadily at a tile; a green bar fills after ~0.85 s.
+---
 
-The bottom-left status line tells you which mode is active.
+## Calibration Tips
 
-5.3 Home screen
-Tile	Action
-EMAIL	Opens the recipient picker
-YOUTUBE	Opens FAV SONGS · MOVIES · TYPE
-GOOGLE	Opens google.com in your browser
-ALPHABETS	Opens the on-screen keyboard
-UNDO	Restores the last text deletion
-RUN	Sends the current text to the assistant
-CURSOR	Desktop cursor, click, scroll, paste, fine movement, safe mode, re-center
-5.4 Typing
-Select ALPHABETS. The keyboard has:
+For best results:
 
-Two predicted next-word tiles (Gemini if configured, local otherwise).
+- Use even, front-facing lighting.
+- Avoid bright windows directly behind you.
+- Sit roughly an arm's length from the display.
+- Keep your head relatively still.
+- Move your eyes rather than your entire head.
+- Make sure both eyes are clearly visible.
+- Avoid extremely dark environments.
 
-Letter groups A–F, G–L, M–R, S–X, Y/Z.
+If the application reports:
 
-0–9 for digits, SYM for punctuation.
+```text
+Horizontal iris signal is too weak
+```
 
-SPACE, DEL, RUN, QUICK, BACK.
+try:
 
-Gestures while typing:
+- Moving closer to the webcam
+- Increasing light on your face
+- Removing strong glare from glasses
+- Looking farther left and right during calibration
 
-Double-blink deletes the last word.
+---
 
-Triple-blink anywhere triggers RUN.
+## Re-Center Without Full Calibration
 
-Long blink (~1.7 s) pauses everything.
+If the neutral eye position has shifted slightly during use:
 
-5.5 Sending email
-Default flow (review required):
+```text
+CURSOR → RE-CENTER
+```
 
-EMAIL → pick a contact (e.g. SG).
+This adjusts the neutral position without requiring a full calibration.
 
-Choose a topic (EMERGENCY · FOOD · WELLBEING · CHECK IN · CONTACT ME) or TYPE your own.
+---
 
-Gemini drafts the message (local template if Gemini unavailable).
+# 5. Everyday Use
 
-Read the draft, page through if long.
+# 5.1 Moving the Marker
 
-Select GMAIL. Browser opens a prefilled compose. Click Send in Gmail.
+A marker at the top of the interface indicates the currently focused tile.
 
-A copy of every reviewed message is saved to drafts/ as .eml.
+Look:
 
-Auto-send flow (opt-in per contact):
+- **Left** to move left
+- **Right** to move right
+- **Center** to stop
 
-If a contact in contacts.json has "auto_send": true and SMTP is configured (§6), then after you pick a topic the message is sent immediately. No review screen and no undo. Only mark contacts auto_send: true if you accept that.
+Holding a side glance causes repeated movement after a short delay.
 
-5.6 YouTube
-Select YOUTUBE, then:
+Small accidental eye movements inside the configured dead zone are ignored.
 
-FAV SONGS → pick a saved song. Edit favorites.json to change the list.
+---
 
-MOVIES → same for movies.
+# 5.2 Selecting a Tile
 
-TYPE → opens the keyboard with play YouTube prefilled.
+Iris Assistant supports two selection modes.
 
-5.7 Desktop cursor
-Select CURSOR:
+## Blink Mode
 
-Tile	Action
-MOVE X	Look left/right to slide the cursor horizontally
-MOVE Y	Left glance = up, right glance = down
-CLICK	Left-click at the current position
-R-CLICK	Right-click
-SCROLL ↑ / ↓	Scroll the focused window
-PASTE	Paste the clipboard into the focused app
-FINE / FAST	Toggle precision cursor speed
-RE-CENTER	Recalibrate the iris neutral point
-SAFE / UNSAFE	Toggle safe mode — blocks all desktop actions
-BACK	Return to the home screen
-Esc on the physical keyboard exits the app.
+Blink mode is preferred when calibration succeeds.
 
-6. Optional: auto-send email via Gmail SMTP
-Skip this section if you want review-before-send. The default Gmail-compose flow works without any configuration.
+To select a tile:
 
-To deliver email directly — necessary for auto_send: true contacts — you need a Gmail App Password and five environment variables.
+1. Focus the desired tile.
+2. Close both eyes deliberately.
+3. Hold the blink for approximately **0.4–0.8 seconds**.
+4. Open your eyes.
 
-6.1 Create the App Password
-Sign in to the sending account at https://myaccount.google.com/apppasswords
+The selected tile is activated.
 
-If the page says "not available", turn on 2-Step Verification at https://myaccount.google.com/security first, then return.
+---
 
-Type a name (e.g. iris) and click Create.
+## Dwell Mode
 
-Google shows a 16-character code with spaces, like abcd efgh ijkl mnop. Remove the spaces → abcdefghijklmnop.
+If blink tracking is unreliable, the application can switch to dwell mode.
 
-6.2 Set the environment variables
-In the same Command Prompt where you launch the app:
+To select:
 
-bat
+1. Focus a tile.
+2. Keep the marker on the tile.
+3. Hold your gaze for approximately **0.85 seconds**.
+
+A progress indicator fills before activation.
+
+The application status area indicates which selection mode is currently active.
+
+---
+
+# 5.3 Home Screen
+
+The main screen provides several large tiles.
+
+| Tile | Action |
+|---|---|
+| `EMAIL` | Opens the saved recipient picker |
+| `YOUTUBE` | Opens favorite songs, movies, or typed YouTube search |
+| `GOOGLE` | Opens Google |
+| `ALPHABETS` | Opens the on-screen keyboard |
+| `UNDO` | Restores the most recently deleted text |
+| `RUN` | Sends the current text to the assistant |
+| `CURSOR` | Opens desktop cursor controls |
+
+---
+
+# 5.4 On-Screen Keyboard
+
+Select:
+
+```text
+ALPHABETS
+```
+
+to open the keyboard.
+
+The keyboard contains:
+
+### Predictive Tiles
+
+Two predicted next-word suggestions are displayed.
+
+If Gemini is configured, suggestions may use Gemini.
+
+Otherwise, local prediction logic is used.
+
+### Letter Groups
+
+Letters are grouped into large tiles:
+
+```text
+A–F
+G–L
+M–R
+S–X
+Y/Z
+```
+
+### Numbers
+
+```text
+0–9
+```
+
+### Symbols
+
+Select:
+
+```text
+SYM
+```
+
+for punctuation and symbols.
+
+### Other Controls
+
+```text
+SPACE
+DEL
+RUN
+QUICK
+BACK
+```
+
+---
+
+## Keyboard Blink Gestures
+
+### Double Blink
+
+Deletes the last word.
+
+This can be disabled in `config.json`.
+
+### Triple Blink
+
+Triggers:
+
+```text
+RUN
+```
+
+from anywhere when enabled.
+
+### Long Blink
+
+A blink of approximately **1.7 seconds** pauses or resumes eye-control input.
+
+---
+
+# 5.5 Sending Email
+
+Iris Assistant supports two email workflows.
+
+---
+
+## Default Email Flow: Review Required
+
+The normal workflow is:
+
+```text
+EMAIL
+→ Choose Contact
+→ Choose Topic
+→ Review Draft
+→ GMAIL
+→ Send
+```
+
+Example contacts:
+
+```text
+SG
+PK
+```
+
+Available topic tiles may include:
+
+```text
+EMERGENCY
+FOOD
+WELLBEING
+CHECK IN
+CONTACT ME
+TYPE
+```
+
+After selecting a topic:
+
+1. Gemini attempts to generate a draft.
+2. If Gemini is unavailable, a local template is used.
+3. The user reviews the message.
+4. Long drafts can be paged through.
+5. Selecting `GMAIL` opens a prefilled Gmail compose window.
+6. The user performs the final Send action.
+
+Every reviewed message is also saved locally as:
+
+```text
+drafts/*.eml
+```
+
+---
+
+## Auto-Send Flow
+
+Auto-send is available only when explicitly enabled for a contact.
+
+Example:
+
+```json
+{
+  "name": "Example Contact",
+  "email": "example@gmail.com",
+  "auto_send": true
+}
+```
+
+SMTP must also be configured.
+
+When both conditions are satisfied:
+
+```text
+EMAIL
+→ Contact
+→ Topic
+→ Immediate SMTP Send
+```
+
+There is **no review screen and no undo after delivery**.
+
+Only enable:
+
+```json
+"auto_send": true
+```
+
+for contacts where this behavior is intentional.
+
+---
+
+# 5.6 YouTube
+
+Select:
+
+```text
+YOUTUBE
+```
+
+The submenu contains:
+
+```text
+FAV SONGS
+MOVIES
+TYPE
+```
+
+---
+
+## Favorite Songs
+
+Select:
+
+```text
+FAV SONGS
+```
+
+to display saved music.
+
+Favorites are stored in:
+
+```text
+favorites.json
+```
+
+Edit this file to customize the available songs.
+
+---
+
+## Movies
+
+Select:
+
+```text
+MOVIES
+```
+
+to display saved movie shortcuts.
+
+---
+
+## Custom YouTube Request
+
+Select:
+
+```text
+TYPE
+```
+
+The keyboard opens with a YouTube command prepared for editing.
+
+Example:
+
+```text
+play YouTube Country Roads
+```
+
+---
+
+# 5.7 Desktop Cursor
+
+Select:
+
+```text
+CURSOR
+```
+
+to access desktop-control functions.
+
+| Tile | Action |
+|---|---|
+| `MOVE X` | Move the cursor horizontally using left/right eye movement |
+| `MOVE Y` | Left glance moves up; right glance moves down |
+| `CLICK` | Left-click at the current cursor position |
+| `R-CLICK` | Right-click |
+| `SCROLL ↑` | Scroll upward |
+| `SCROLL ↓` | Scroll downward |
+| `PASTE` | Paste clipboard contents into the focused application |
+| `FINE / FAST` | Toggle cursor speed |
+| `RE-CENTER` | Reset the neutral iris position |
+| `SAFE / UNSAFE` | Enable or disable desktop actions |
+| `BACK` | Return to the home screen |
+
+---
+
+## Safe Mode
+
+Safe mode prevents desktop actions from being executed accidentally.
+
+When safe mode is active, actions such as:
+
+- Clicking
+- Scrolling
+- Pasting
+- Cursor movement
+
+can be blocked.
+
+Use the:
+
+```text
+SAFE / UNSAFE
+```
+
+tile to change the mode.
+
+---
+
+## Exit
+
+Press:
+
+```text
+Esc
+```
+
+on the physical keyboard to close the application.
+
+---
+
+# 6. Optional: Gmail SMTP Auto-Send
+
+You can skip this section if you only want the standard **review-before-send Gmail workflow**.
+
+SMTP is needed for direct email delivery and contacts configured with:
+
+```json
+"auto_send": true
+```
+
+---
+
+## 6.1 Create a Gmail App Password
+
+Sign into your Google account and open:
+
+https://myaccount.google.com/apppasswords
+
+If App Passwords are unavailable, enable **2-Step Verification** first:
+
+https://myaccount.google.com/security
+
+Create a new App Password.
+
+Example name:
+
+```text
+iris
+```
+
+Google will generate a 16-character password similar to:
+
+```text
+abcd efgh ijkl mnop
+```
+
+Remove the spaces:
+
+```text
+abcdefghijklmnop
+```
+
+Do **not** use your normal Gmail password.
+
+---
+
+# 6.2 Set SMTP Environment Variables
+
+In the same Command Prompt used to run the application:
+
+```bat
 set "SMTP_HOST=smtp.gmail.com"
 set "SMTP_PORT=587"
 set "SMTP_USER=you@gmail.com"
 set "SMTP_PASSWORD=abcdefghijklmnop"
 set "EMAIL_FROM=you@gmail.com"
+```
+
+Then run:
+
+```bat
 run.bat
-Verify all five:
+```
 
-bat
-echo %SMTP_HOST% %SMTP_PORT% %SMTP_USER% %SMTP_PASSWORD% %EMAIL_FROM%
-set only lasts for that window. To make them permanent:
+---
 
-bat
+## Verify the Variables
+
+```bat
+echo %SMTP_HOST%
+echo %SMTP_PORT%
+echo %SMTP_USER%
+echo %SMTP_PASSWORD%
+echo %EMAIL_FROM%
+```
+
+---
+
+## Make the Variables Permanent
+
+The `set` command lasts only for the current terminal window.
+
+To store the values permanently:
+
+```bat
 setx SMTP_HOST "smtp.gmail.com"
 setx SMTP_PORT "587"
 setx SMTP_USER "you@gmail.com"
 setx SMTP_PASSWORD "abcdefghijklmnop"
 setx EMAIL_FROM "you@gmail.com"
-Then close and reopen the Command Prompt.
+```
 
-6.3 Common SMTP failures
-Error	Fix
-535 Authentication failed	You used your normal password, not an App Password, or you left spaces in it. Regenerate and set again with no spaces.
-534 Application-specific password required	You need an App Password, and 2-Step Verification must be on.
-Connection refused / timeout	Your network blocks outbound port 587. Try 465, or a different network.
-SEND tile never appears	One of the five variables isn't set, or the recipient address is a placeholder. Re-run the echo check.
-7. Optional: Gemini suggestions and drafts
-Gemini is used for:
+Close and reopen Command Prompt afterward.
 
-Next-word suggestions while typing (background, debounced; local predictions show instantly).
+---
 
-Intent suggestions on the IDEAS screen.
+# 6.3 Common SMTP Errors
 
-Email drafts when you pick a topic or type a request.
+| Error | Likely Fix |
+|---|---|
+| `535 Authentication failed` | Use a Gmail App Password rather than your normal password |
+| `534 Application-specific password required` | Enable 2-Step Verification and create an App Password |
+| Connection refused / timeout | The network may block port `587`; try another network or supported SMTP configuration |
+| `SEND` tile never appears | Check whether all required SMTP environment variables are present |
 
-Without Gemini, the app uses bundled local suggestions and email templates. Nothing crashes.
+---
 
-Enable:
+# 7. Optional: Gemini Suggestions and Drafts
 
-bat
+Gemini can improve several parts of Iris Assistant.
+
+It can provide:
+
+- Next-word predictions
+- Intent suggestions
+- Email drafts
+
+Gemini is optional.
+
+Without it, Iris Assistant falls back to bundled local logic.
+
+---
+
+## Gemini Features
+
+### Next-Word Predictions
+
+While typing, local predictions appear immediately.
+
+Gemini suggestions may update the predictions asynchronously when configured.
+
+### Intent Suggestions
+
+Gemini can suggest possible actions on the assistant's ideas screen.
+
+### Email Drafting
+
+When selecting an email topic, Gemini attempts to create a natural-language draft.
+
+If Gemini fails, Iris Assistant automatically uses a local email template.
+
+---
+
+## Enable Gemini
+
+Set:
+
+```bat
 set "GEMINI_API_KEY=your-api-key-here"
 set "GEMINI_MODEL=gemini-2.0-flash"
+```
+
+Then run:
+
+```bat
 run.bat
-Get a key at https://aistudio.google.com/apikey.
+```
 
-Permanent:
+Create an API key at:
 
-bat
+https://aistudio.google.com/apikey
+
+---
+
+## Store Gemini Settings Permanently
+
+```bat
 setx GEMINI_API_KEY "your-api-key-here"
 setx GEMINI_MODEL "gemini-2.0-flash"
-If Gemini is unavailable — bad key, network block, quota exceeded — every feature falls back silently. Drafts show Draft: Local template instead of Draft: Gemini draft.
+```
 
-Optional OpenAI fallback: if OPENAI_API_KEY is also set, the code tries Gemini first, then OpenAI, then local.
+Then restart Command Prompt.
 
-8. Importing contacts from Google or Outlook
-Export contacts to CSV:
+---
 
-Google Contacts export
+## Gemini Failure Behavior
 
-Outlook contacts export
+If Gemini becomes unavailable because of:
 
-From the project folder:
+- Invalid API key
+- Network failure
+- API quota
+- Service error
+- Authentication issue
 
-bat
+the application continues working.
+
+For example, email review may display:
+
+```text
+Draft: Local template
+```
+
+instead of:
+
+```text
+Draft: Gemini draft
+```
+
+---
+
+## Optional OpenAI Fallback
+
+If an OpenAI API key is configured:
+
+```text
+OPENAI_API_KEY
+```
+
+the application can attempt:
+
+```text
+Gemini
+→ OpenAI
+→ Local fallback
+```
+
+depending on the configured assistant logic.
+
+---
+
+# 8. Importing Contacts
+
+Contacts can be imported from a CSV file.
+
+You can export contacts from services such as:
+
+- Google Contacts
+- Microsoft Outlook
+
+Activate the project environment:
+
+```bat
 .venv\Scripts\activate
+```
+
+Then run:
+
+```bat
 python import_contacts.py "%USERPROFILE%\Downloads\contacts.csv" --names "Sam,Priya"
---names imports only people whose name contains one of the fragments; omit it to import everyone.
+```
 
-9. Testing without a camera
-bat
+The `--names` option imports only contacts whose names contain one of the specified fragments.
+
+Example:
+
+```text
+Sam
+Priya
+```
+
+To import all supported contacts, omit `--names`.
+
+---
+
+# 9. Testing Without a Camera
+
+Many assistant features can be tested without webcam input.
+
+Activate the environment:
+
+```bat
 .venv\Scripts\activate
-python assistant_cli.py play YouTube cat piano
+```
+
+---
+
+## Preview Assistant Commands
+
+```bat
+python assistant_cli.py "play YouTube cat piano"
+```
+
+```bat
 python assistant_cli.py "email Sam that I missed class"
+```
+
+```bat
 python assistant_cli.py "search Google for flood maps" --execute
---execute opens browser actions; for email it opens Gmail compose and saves an .eml. It never sends via SMTP.
+```
 
-Run the unit tests:
+The `--execute` option allows browser actions.
 
-bat
+For email actions, it can:
+
+- Open Gmail compose
+- Save an `.eml` draft
+
+It does **not** automatically send via SMTP.
+
+---
+
+## Run Unit Tests
+
+```bat
 python -m unittest -v test_horizontal_logic test_assistant test_iris_tracking
-All 36 tests should pass. None need a webcam.
+```
 
-10. Configuration reference
-config.json — restart run.bat after edits.
+The test suite is designed to run without requiring a webcam.
 
-Key	Meaning
-camera_index	Which webcam. 0 is usually the built-in.
-selection_mode	"auto", "blink", or "dwell".
-nav_trigger	How far sideways before the marker moves. Higher = less twitchy.
-nav_hold_s	How long to hold a side glance before the first step.
-nav_repeat_s	Interval between auto-repeats while holding.
-deadzone	How much iris movement is ignored as jitter.
-speed_x, speed_y	Desktop cursor speed.
-long_blink_min_s / long_blink_max_s	Selection blink window.
-pause_blink_min_s / pause_blink_max_s	Pause toggle window.
-double_blink_*	Word-delete gesture tuning.
-triple_blink_run	Whether triple-blink triggers RUN.
-email_topics	Topic buttons shown after picking a recipient.
-quick_words	Six shortcut words on the keyboard's QUICK page.
-gmail_account_index	Which signed-in Gmail account for compose.
-11. Troubleshooting
-Problem	Fix
-App exits immediately with a traceback	Paste the traceback. Most common cause: a file wasn't overwritten with the current version.
-"Camera unavailable"	Close other apps using the camera (Teams, Zoom). Check camera_index.
-Marker jumps several tiles	Re-run calibrate.py. Lighting or seating changed.
-Marker never moves	Iris signal weak. Move closer, increase light.
-Marker moves but won't select	Blink too fast or too slow. Count "one-Mississippi".
-Double-blink deletes unintended words	Set "double_blink_delete": false in config.json.
-YOUTUBE tile just types the word youtube	You're on the keyboard, not the home screen. The home YOUTUBE opens the submenu; the YOUTUBE quick word inserts the literal text.
-GMAIL tile doesn't appear after reviewing an email	SMTP is configured → the tile is SEND. Otherwise the tile is GMAIL.
-Email doesn't send	535 errors mean wrong App Password. See §6.3.
-Gemini drafts look identical to old messages	Gemini call failed, local template used. Check terminal for 401 / 403.
-Playwright Chromium install fails	Harmless. play YouTube ... falls back to search results.
-12. What problem this solves
-Standard assistive input devices require either hand movement (mouse, joystick, switch) or head tracking (large head-mounted sensors). For users with severe motor impairment, both are tiring or impossible. Eye gaze is the last reliable motor channel, but most gaze-tracking systems are expensive dedicated hardware.
+---
 
-This project explores a different point in the design space:
+# 10. Configuration Reference
 
-It uses a webcam you already own — no special hardware.
+Application settings are stored in:
 
-It tracks only one axis (horizontal iris position), which is achievable with open-source MediaPipe landmarks at full framerate on a laptop CPU. Vertical iris motion is noisier and less repeatable across users, so the project deliberately reuses the horizontal signal for both axes.
+```text
+config.json
+```
 
-It provides very large targets (top-of-screen tiles) sized to be hit reliably with one-axis movement, rather than a free-floating pointer.
+Restart Iris Assistant after changing configuration values.
 
-It treats every action as a reviewable proposal unless the user explicitly opts in to auto-send per contact.
+| Key | Meaning |
+|---|---|
+| `camera_index` | Webcam index. `0` is usually the built-in camera |
+| `selection_mode` | `"auto"`, `"blink"`, or `"dwell"` |
+| `nav_trigger` | Horizontal movement required before navigation begins |
+| `nav_hold_s` | How long a side glance must be held before movement |
+| `nav_repeat_s` | Repeat interval while holding a glance |
+| `deadzone` | Amount of eye movement ignored as jitter |
+| `speed_x` | Horizontal desktop cursor speed |
+| `speed_y` | Vertical desktop cursor speed |
+| `long_blink_min_s` | Minimum duration for selection blink |
+| `long_blink_max_s` | Maximum duration for selection blink |
+| `pause_blink_min_s` | Minimum duration for pause blink |
+| `pause_blink_max_s` | Maximum duration for pause blink |
+| `double_blink_*` | Double-blink gesture configuration |
+| `triple_blink_run` | Enables triple-blink `RUN` |
+| `email_topics` | Topics shown after selecting an email recipient |
+| `quick_words` | Shortcut words on the keyboard's `QUICK` page |
+| `gmail_account_index` | Which signed-in Google account Gmail compose should use |
 
-It is entirely local and offline-capable for the core flow. Only Gmail and (optionally) Gemini require internet.
+---
 
-13. How it differs from existing tools
-Existing approach	This project
-Dedicated eye-tracking hardware (Tobii, EyeTech) costing hundreds to thousands	Runs on any Windows laptop with a webcam
-Two-axis iris tracking requiring careful calibration to a screen	Single-axis iris signal, reused for both axes; faster to calibrate, less sensitive to head pose
-Dwell-only selection (tiring on the eyes)	Blink selection by default; dwell is an automatic fallback
-Voice-first assistants (Siri, Alexa) that assume speech is available	Silent by design; no voice required
-Full OCR or on-screen keyboard agents that move the OS cursor everywhere	A dedicated tile interface sized for the input method; desktop cursor is one option, not the only one
-Cloud-first AI that sends your typed text to a server	Local by default; Gemini or OpenAI only if you opt in
-Auto-send everything to maximize convenience	Review by default; auto-send is opt-in per contact
-14. Known limitations
-One-axis iris tracking is inherently less precise than dedicated two-axis eye trackers. Fine work (image editing, code) is not the target use case.
+# 11. Troubleshooting
 
-Vertical cursor motion reuses horizontal eye movement. It is controllable but not intuitive for first-time users.
+| Problem | Possible Solution |
+|---|---|
+| App closes immediately with a traceback | Read the terminal error. A project file may be outdated or missing |
+| `Camera unavailable` | Close Zoom, Teams, or other applications using the webcam |
+| Wrong camera opens | Change `camera_index` in `config.json` |
+| Marker jumps across several tiles | Recalibrate and improve lighting |
+| Marker does not move | Move closer to the webcam and increase lighting |
+| Marker moves but does not select | Adjust blink duration or use dwell mode |
+| Double blink deletes words accidentally | Set `"double_blink_delete": false` |
+| YouTube tile only types `youtube` | Make sure you are on the home screen rather than the keyboard |
+| Gmail tile does not appear | Check whether the application expects `SEND` because SMTP is configured |
+| Email SMTP authentication fails | Verify that you are using a Gmail App Password |
+| Gemini drafts always look like templates | Check the terminal for Gemini API errors |
+| Playwright Chromium installation fails | The project can continue using browser-search fallbacks |
+| Eye control becomes inaccurate after moving | Use `CURSOR → RE-CENTER` or recalibrate |
 
-Blink-based selection depends on reliable eyelid tracking. Users who wear thick glasses, or sit in poor lighting, may need dwell mode.
+---
 
-Auto-send has no undo. Once a message leaves via SMTP, it is delivered.
+# 12. What Problem This Solves
 
-Gmail compose opens the account specified by gmail_account_index. With multiple signed-in Google accounts, verify which one is active before clicking Send.
+Many standard computer-input systems depend on:
 
-The Gemini integration depends on a third-party API. If it becomes unavailable, the app falls back to local templates and suggestions automatically.
+- Hand movement
+- Finger movement
+- A mouse
+- A keyboard
+- A joystick
+- A physical switch
+- Head tracking
+- Voice control
 
-15. License and attribution
-Provided as-is for educational and personal use. Uses:
+For users with severe motor impairments, some or all of these methods may be tiring, unreliable, or impossible.
 
-MediaPipe (Apache 2.0) — face landmark detection
+Eye movement may remain a usable motor channel.
 
-OpenCV (Apache 2.0) — camera input
+However, dedicated gaze-tracking systems frequently require specialized hardware.
 
-PyAutoGUI (BSD) — cursor and keyboard control
+Iris Assistant explores a different design approach.
 
-Playwright (Apache 2.0) — optional YouTube result extraction
+---
 
-Tkinter (PSF) — the interface
+## Webcam-Only Input
 
-Gemini and OpenAI integration are optional and governed by their own terms.
+The project uses an ordinary webcam already present on many laptops.
+
+No specialized eye-tracking device is required.
+
+---
+
+## Single-Axis Tracking
+
+Instead of attempting full two-dimensional gaze estimation, the project primarily tracks:
+
+```text
+horizontal iris movement
+```
+
+This reduces complexity and can make calibration more repeatable with ordinary webcams.
+
+---
+
+## Large Interaction Targets
+
+Rather than requiring the user to precisely position a mouse pointer over small buttons, Iris Assistant provides large tiles.
+
+The marker moves between discrete interface options.
+
+This makes the interaction better suited to relatively noisy webcam-based gaze estimation.
+
+---
+
+## Horizontal Signal Reused for Vertical Actions
+
+Vertical gaze tracking can be less reliable with ordinary webcams.
+
+For cursor mode, Iris Assistant can reuse horizontal eye gestures:
+
+```text
+Left glance  → Move up
+Right glance → Move down
+```
+
+when vertical movement mode is active.
+
+---
+
+## Blink Selection
+
+Many gaze interfaces rely primarily on dwell selection.
+
+Long periods of staring at an interface element can become tiring.
+
+Iris Assistant therefore uses deliberate blink selection when reliable eyelid tracking is available.
+
+Dwell remains available as a fallback.
+
+---
+
+## Review Before Actions
+
+Potentially important actions are designed around confirmation.
+
+For example, the default email workflow is:
+
+```text
+Generate
+→ Review
+→ Open Gmail
+→ User sends
+```
+
+Direct automatic sending requires explicit configuration for a specific contact.
+
+---
+
+## Local-First Design
+
+Core functionality can operate locally.
+
+Cloud integrations are optional.
+
+Internet access is needed only for services such as:
+
+- Gmail
+- YouTube
+- Google
+- Gemini
+- OpenAI
+
+---
+
+# 13. How It Differs From Existing Tools
+
+| Existing Approach | Iris Assistant |
+|---|---|
+| Dedicated eye-tracking hardware such as Tobii or EyeTech | Uses a standard webcam |
+| Full two-axis gaze estimation | Primarily tracks one horizontal iris axis |
+| Free-floating gaze pointer | Uses large discrete interface tiles |
+| Dwell-only selection | Blink selection with dwell fallback |
+| Voice-first assistants | Designed to work silently |
+| Interfaces that assume keyboard or mouse use | Main interface is gaze-driven |
+| Cloud-first AI assistants | Core interaction can work locally |
+| Automatic execution of communication actions | Email review is the default |
+| Specialized eye-tracking sensors | Uses MediaPipe landmarks and ordinary camera input |
+
+---
+
+# 14. Known Limitations
+
+## Webcam Accuracy
+
+Webcam-only eye tracking is inherently less precise than specialized gaze-tracking hardware.
+
+Iris Assistant is therefore designed around large tiles rather than pixel-perfect gaze control.
+
+---
+
+## Vertical Cursor Control
+
+Vertical cursor movement reuses horizontal eye gestures.
+
+Although controllable, this interaction may feel unintuitive at first.
+
+---
+
+## Fine Desktop Work
+
+Tasks requiring very precise cursor placement may still be difficult.
+
+Examples include:
+
+- Detailed image editing
+- Fine drawing
+- Complex code editing
+- Small UI controls
+
+These are not the primary target use cases.
+
+---
+
+## Blink Detection
+
+Blink detection depends on clear eyelid visibility.
+
+Performance may decrease with:
+
+- Poor lighting
+- Strong reflections
+- Thick glasses
+- Webcam blur
+- Extreme camera angles
+
+Dwell selection is available as a fallback.
+
+---
+
+## Head Movement
+
+Large changes in head position can affect calibration.
+
+The user may need to:
+
+```text
+RE-CENTER
+```
+
+or recalibrate.
+
+---
+
+## SMTP Auto-Send
+
+Once an email has been sent through SMTP, it cannot be undone by Iris Assistant.
+
+Use:
+
+```json
+"auto_send": true
+```
+
+carefully.
+
+---
+
+## Gmail Account Selection
+
+If multiple Google accounts are signed into the browser, the configured:
+
+```text
+gmail_account_index
+```
+
+must point to the intended account.
+
+Always verify the active Gmail account before sending important messages.
+
+---
+
+## Third-Party AI Services
+
+Gemini and OpenAI depend on external APIs.
+
+Availability can be affected by:
+
+- Network access
+- API changes
+- Authentication
+- Usage quotas
+- Service outages
+
+The application uses local fallbacks when possible.
+
+---
+
+# 15. License and Attribution
+
+This project is provided **as-is for educational and personal use**.
+
+It uses or integrates with several third-party open-source projects and services.
+
+### MediaPipe
+
+Used for face and iris landmark detection.
+
+**License:** Apache License 2.0
+
+https://github.com/google-ai-edge/mediapipe
+
+### OpenCV
+
+Used for webcam capture and image processing.
+
+**License:** Apache License 2.0
+
+https://opencv.org/
+
+### PyAutoGUI
+
+Used for mouse, cursor, keyboard, and desktop automation.
+
+**License:** BSD
+
+https://github.com/asweigart/pyautogui
+
+### Playwright
+
+Used optionally for browser automation and YouTube result handling.
+
+**License:** Apache License 2.0
+
+https://playwright.dev/python/
+
+### Tkinter
+
+Used for the graphical interface.
+
+Distributed with Python.
+
+https://docs.python.org/3/library/tkinter.html
+
+### Google Gemini
+
+Optional cloud AI integration.
+
+Use is subject to Google's API terms and policies.
+
+### OpenAI
+
+Optional fallback AI integration.
+
+Use is subject to OpenAI's API terms and policies.
+
+---
+
+# Privacy and Safety Notes
+
+Iris Assistant may handle sensitive personal information including:
+
+- Contact names
+- Email addresses
+- Email content
+- Calibration measurements
+
+Do not publish local configuration files containing personal data.
+
+Recommended `.gitignore` entries:
+
+```gitignore
+.venv/
+contacts.json
+calibration.json
+drafts/
+.env
+__pycache__/
+*.pyc
+```
+
+Never place API keys or Gmail App Passwords directly inside source files committed to GitHub.
+
+Use environment variables instead.
+
+---
+
+# Quick Start
+
+For users who already have Python 3.11 installed:
+
+```bat
+git clone <your-repository-url>
+cd iris_assistant
+run.bat
+```
+
+Follow the calibration instructions:
+
+```text
+CENTER
+LEFT
+RIGHT
+CLOSE BOTH EYES
+```
+
+Then control Iris Assistant using:
+
+```text
+Look Left / Right → Navigate
+Blink             → Select
+Long Blink         → Pause
+```
+
+---
+
+# Project Goal
+
+Iris Assistant explores whether an ordinary laptop webcam can provide a practical alternative input channel for people who cannot reliably use conventional desktop controls.
+
+Instead of attempting highly precise gaze tracking, it focuses on a simpler question:
+
+> **Can reliable horizontal iris movement, large interface targets, blink selection, and carefully designed shortcuts provide meaningful hands-free access to everyday computer tasks?**
