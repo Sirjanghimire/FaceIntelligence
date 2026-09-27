@@ -1,0 +1,6 @@
+# Python 3.11 on Windows
+mediapipe==0.10.14
+opencv-contrib-python==4.10.0.84
+numpy>=1.26,<2
+pyautogui==0.9.54
+playwright>=1.50,<2
